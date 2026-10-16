@@ -1,0 +1,40 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: python -m unittest discover -s tests -v
+      - run: node --check autosim/web/app.js
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Run browser smoke test
+        shell: bash
+        run: |
+          python -m autosim --db "$RUNNER_TEMP/browser.sqlite3" > "$RUNNER_TEMP/autosim.log" 2>&1 &
+          autosim_server_pid=$!
+          trap 'kill "$autosim_server_pid"' EXIT
+          node tests/browser_smoke.cjs
